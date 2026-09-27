@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A4 鏡文字メーカー</title>
+  <style>
+    :root { --paper-w: 1122px; --paper-h: 793px; --ink: #171a21; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: "Yu Gothic UI", "Meiryo", sans-serif;
+      background: #eef1f5;
+    }
+    header {
+      padding: 18px 22px; color: white;
+      background: linear-gradient(120deg, #335cce, #6634b5);
+    }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    header p { margin: 0; opacity: .88; font-size: 14px; }
+    main { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: calc(100vh - 82px); }
+    .controls { padding: 20px; background: white; border-right: 1px solid #d9dee8; }
+    label, legend { display: block; font-weight: 700; margin-bottom: 8px; }
+    textarea {
+      width: 100%; min-height: 145px; resize: vertical; padding: 12px;
+      border: 2px solid #b9c3d6; border-radius: 10px; font: inherit; font-size: 18px;
+    }
+    textarea:focus { outline: 3px solid #dce5ff; border-color: #335cce; }
+    fieldset { border: 0; padding: 0; margin: 20px 0; }
+    .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .choice label { margin: 0; }
+    .choice input { position: absolute; opacity: 0; }
+    .choice span {
+      display: block; padding: 10px 8px; text-align: center; cursor: pointer;
+      border: 2px solid #ccd3e0; border-radius: 9px; font-weight: 600;
+    }
+    .choice input:checked + span { color: #284cb5; border-color: #335cce; background: #edf2ff; }
+    .actions { display: grid; gap: 10px; margin-top: 24px; }
+    button {
+      border: 0; border-radius: 10px; padding: 13px 16px; cursor: pointer;
+      font: inherit; font-weight: 800;
+    }
+    .print { color: white; background: #335cce; }
+    .show-full { color: white; background: #15916b; }
+    .clear { color: #394254; background: #e8ebf1; }
+    .hint { color: #616a7a; font-size: 13px; line-height: 1.6; margin-top: 15px; }
+    .status { margin-top: 10px; color: #465168; font-size: 13px; }
+    .preview-area { min-width: 0; padding: 24px; overflow: auto; }
+    .preview-title { margin: 0 0 12px; font-size: 14px; color: #5d6572; }
+    .paper-wrap { width: max-content; transform-origin: top left; }
+    .paper {
+      width: var(--paper-w); height: var(--paper-h); padding: 38px;
+      display: flex; justify-content: center; align-items: center;
+      background: white; box-shadow: 0 8px 30px #34405a29;
+      overflow: hidden;
+    }
+    .mirror {
+      max-width: 100%; max-height: 100%; color: #000; font-weight: 700;
+      line-height: 1.06; white-space: pre-wrap; overflow-wrap: normal;
+      transform: scaleX(-1); transform-origin: center;
+    }
+    .mirror.horizontal { writing-mode: horizontal-tb; text-align: center; }
+    .mirror.vertical { writing-mode: vertical-rl; text-orientation: upright; }
+    .mirror.single-line, .fullscreen-mirror.single-line { white-space: nowrap; max-width: none; }
+    .fullscreen-view {
+      position: fixed; inset: 0; z-index: 1000; display: none;
+      align-items: center; justify-content: center; overflow: hidden;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+               max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      background: white;
+    }
+    .fullscreen-view.open { display: flex; }
+    .fullscreen-mirror {
+      color: #000; font-weight: 700; line-height: 1.06; white-space: pre-wrap;
+      max-width: 100%; max-height: 100%; transform: scaleX(-1); transform-origin: center;
+    }
+    .fullscreen-mirror.horizontal { writing-mode: horizontal-tb; text-align: center; }
+    .fullscreen-mirror.vertical { writing-mode: vertical-rl; text-orientation: upright; }
+    .close-full {
+      position: fixed; top: max(10px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right)); z-index: 1001;
+      width: 48px; height: 48px; padding: 0; border-radius: 50%;
+      color: white; background: #111b; font-size: 26px; line-height: 1;
+    }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .controls { border-right: 0; border-bottom: 1px solid #d9dee8; }
+      .preview-area { padding: 16px; }
+    }
+    @media print {
+      body { background: white; }
+      header, .controls, .preview-title, .fullscreen-view { display: none !important; }
+      main, .preview-area, .paper-wrap { display: block; margin: 0; padding: 0; min-height: 0; overflow: visible; }
+      .paper-wrap { transform: none !important; }
+      .paper {
+        width: 100vw; height: 100vh; padding: 10mm;
+        box-shadow: none; page-break-after: avoid;
+      }
+    }
+  </style>
+  <style id="pageStyle">@page { size: A4 landscape; margin: 0; }</style>
+</head>
+<body>
+  <header>
+    <h1>A4 鏡文字メーカー</h1>
+    <p>入力した文字を左右反転し、A4いっぱいに自動拡大します</p>
+  </header>
+  <main>
+    <section class="controls">
+      <label for="source">鏡文字にする内容</label>
+      <textarea id="source" placeholder="ここに文字を入力">ツナマヨおにぎり</textarea>
+
+      <fieldset>
+        <legend>文字の向き</legend>
+        <div class="choice">
+          <label><input type="radio" name="writing" value="horizontal" checked><span>横書き</span></label>
+          <label><input type="radio" name="writing" value="vertical"><span>縦書き</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>用紙の向き</legend>
+        <div class="choice">
+          <label><input type="radio" name="orientation" value="landscape" checked><span>A4 横</span></label>
+          <label><input type="radio" name="orientation" value="portrait"><span>A4 縦</span></label>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button class="show-full" id="fullButton">画面いっぱいで見せる</button>
+        <button class="print" id="printButton">印刷・PDFに保存</button>
+        <button class="clear" id="clearButton">文字を消す</button>
+      </div>
+      <p class="hint">ボタンを押した後、印刷画面のプリンターで「PDFに保存」を選んでください。印刷設定の余白は「なし」、倍率は「100%」がおすすめです。</p>
+      <div class="status" id="status" aria-live="polite"></div>
+    </section>
+
+    <section class="preview-area" id="previewArea">
+      <p class="preview-title">印刷プレビュー（灰色の外側は印刷されません）</p>
+      <div class="paper-wrap" id="paperWrap">
+        <div class="paper" id="paper"><div class="mirror horizontal" id="mirror"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <section class="fullscreen-view" id="fullscreenView" aria-label="全画面プレビュー">
+    <div class="fullscreen-mirror horizontal" id="fullscreenMirror"></div>
+    <button class="close-full" id="closeFull" aria-label="全画面表示を終了">×</button>
+  </section>
+
+  <script>
+    const source = document.getElementById('source');
+    const mirror = document.getElementById('mirror');
+    const paper = document.getElementById('paper');
+    const paperWrap = document.getElementById('paperWrap');
+    const previewArea = document.getElementById('previewArea');
+    const status = document.getElementById('status');
+    const pageStyle = document.getElementById('pageStyle');
+    const fullscreenView = document.getElementById('fullscreenView');
+    const fullscreenMirror = document.getElementById('fullscreenMirror');
+
+    const selected = name => document.querySelector(`input[name="${name}"]:checked`).value;
+
+    function useCompressedSingleLine() {
+      const text = source.value;
+      return selected('writing') === 'horizontal' && text.length > 0 &&
+             !text.includes('\n') && Array.from(text).length <= 10;
+    }
+
+    function fitMirrorElement(element, availableW, availableH, baseClass) {
+      const writing = selected('writing');
+      const singleLine = useCompressedSingleLine();
+      element.textContent = source.value || ' ';
+      element.className = `${baseClass} ${writing}${singleLine ? ' single-line' : ''}`;
+
+      let low = 8, high = 1600;
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        element.style.fontSize = `${mid}px`;
+        const fits = singleLine
+          ? element.scrollHeight <= availableH
+          : element.scrollWidth <= availableW && element.scrollHeight <= availableH;
+        if (fits) low = mid + 1;
+        else high = mid - 1;
+      }
+      const size = Math.max(8, high);
+      element.style.fontSize = `${size}px`;
+      const squeeze = singleLine ? Math.min(1, availableW / element.scrollWidth) : 1;
+      element.style.transform = `scaleX(${-squeeze})`;
+      return { size, squeeze, singleLine };
+    }
+
+    function setPaper() {
+      const landscape = selected('orientation') === 'landscape';
+      document.documentElement.style.setProperty('--paper-w', landscape ? '1122px' : '793px');
+      document.documentElement.style.setProperty('--paper-h', landscape ? '793px' : '1122px');
+      pageStyle.textContent = `@page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 0; }`;
+    }
+
+    function fitText() {
+      const result = fitMirrorElement(mirror, paper.clientWidth - 76, paper.clientHeight - 76, 'mirror');
+      const squeezeText = result.singleLine && result.squeeze < .999
+        ? `・横幅 ${Math.round(result.squeeze * 100)}%に圧縮` : '';
+      status.textContent = source.value ? `自動文字サイズ：約 ${result.size}px${squeezeText}` : '文字を入力してください';
+    }
+
+    function scalePreview() {
+      paperWrap.style.transform = 'none';
+      const available = Math.max(260, previewArea.clientWidth - 48);
+      const scale = Math.min(1, available / paper.offsetWidth);
+      paperWrap.style.transform = `scale(${scale})`;
+      paperWrap.style.width = `${paper.offsetWidth * scale}px`;
+      paperWrap.style.height = `${paper.offsetHeight * scale}px`;
+    }
+
+    function fitFullscreen() {
+      if (!fullscreenView.classList.contains('open')) return;
+      const availableW = fullscreenView.clientWidth - 32;
+      const availableH = fullscreenView.clientHeight - 32;
+      fitMirrorElement(fullscreenMirror, availableW, availableH, 'fullscreen-mirror');
+    }
+
+    async function openFullscreen() {
+      fullscreenView.classList.add('open');
+      fitFullscreen();
+      try {
+        if (fullscreenView.requestFullscreen && !document.fullscreenElement) {
+          await fullscreenView.requestFullscreen();
+        }
+      } catch (_) { /* 固定表示だけでも使用できます */ }
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock(selected('writing') === 'horizontal' ? 'landscape' : 'portrait');
+        }
+      } catch (_) { /* 端末の自動回転設定を優先します */ }
+      setTimeout(fitFullscreen, 180);
+    }
+
+    async function closeFullscreen() {
+      try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
+      try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (_) {}
+      fullscreenView.classList.remove('open');
+    }
+
+    function update() {
+      setPaper();
+      requestAnimationFrame(() => { fitText(); scalePreview(); });
+    }
+
+    source.addEventListener('input', update);
+    document.querySelectorAll('input[type="radio"]').forEach(el => el.addEventListener('change', update));
+    document.getElementById('clearButton').addEventListener('click', () => { source.value = ''; update(); source.focus(); });
+    document.getElementById('fullButton').addEventListener('click', openFullscreen);
+    document.getElementById('closeFull').addEventListener('click', closeFullscreen);
+    document.getElementById('printButton').addEventListener('click', () => { fitText(); window.print(); });
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && fullscreenView.classList.contains('open')) {
+        try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
+        fullscreenView.classList.remove('open');
+      }
+    });
+    window.addEventListener('resize', () => { scalePreview(); fitFullscreen(); });
+    window.addEventListener('beforeprint', fitText);
+    update();
+  </script>
+</body>
+</html>
